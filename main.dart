@@ -1,125 +1,945 @@
-import 'dart:convert';
-import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await MobileAds.instance.initialize();
+
   runApp(const VibeRushApp());
 }
 
-class AppConfig {
-  // Google test IDs. For real AdMob earnings, replace these with your own IDs
-  // or pass them from GitHub Actions with --dart-define.
-  static const bannerId = String.fromEnvironment('ADMOB_BANNER_ID', defaultValue: 'ca-app-pub-3940256099942544/6300978111');
-  static const interstitialId = String.fromEnvironment('ADMOB_INTERSTITIAL_ID', defaultValue: 'ca-app-pub-3940256099942544/1033173712');
-}
-
-class Challenge {
-  final String title, subtitle, emoji;
-  final int points;
-  const Challenge(this.title, this.subtitle, this.emoji, this.points);
-}
-
-const challenges = <Challenge>[
-  Challenge('No-Look Selfie', 'Take a funny selfie without checking the camera first.', '📸', 50),
-  Challenge('One-Word Vibe', 'Describe your mood today using exactly one word.', '⚡', 30),
-  Challenge('Friend Roast', 'Write a harmless, funny compliment for your best friend.', '😂', 40),
-  Challenge('Desk Flex', 'Show your study or gaming setup.', '🎮', 45),
-  Challenge('Random Skill', 'Show one safe skill you can do surprisingly well.', '🔥', 60),
-  Challenge('Old Photo', 'Share a favorite memory from your camera roll.', '🫶', 35),
-  Challenge('Emoji Story', 'Tell a tiny story using only five emojis.', '😎', 25),
-];
-
-class PollModel {
-  final String question;
-  final List<String> options;
-  final List<int> votes;
-  PollModel(this.question, this.options, this.votes);
-  Map<String, dynamic> toJson() => {'q': question, 'o': options, 'v': votes};
-  factory PollModel.fromJson(Map<String, dynamic> j) => PollModel(j['q'], List<String>.from(j['o']), List<int>.from(j['v']));
-}
-
-final defaultPolls = <PollModel>[
-  PollModel('Weekend plan?', ['Gaming 🎮', 'Out with friends 🧋', 'Movies 🍿', 'Sleep 😴'], [12, 19, 8, 15]),
-  PollModel('Best vibe?', ['Chill 🌙', 'Hype 🔥', 'Funny 😂', 'Creative 🎨'], [14, 11, 23, 9]),
-  PollModel('Choose one?', ['Pizza 🍕', 'Burger 🍔', 'Momos 🥟', 'Biryani 🍚'], [21, 17, 14, 26]),
-];
-
 class VibeRushApp extends StatefulWidget {
   const VibeRushApp({super.key});
-  @override State<VibeRushApp> createState() => _VibeRushAppState();
+
+  @override
+  State<VibeRushApp> createState() => _VibeRushAppState();
 }
+
 class _VibeRushAppState extends State<VibeRushApp> {
-  bool dark = true;
-  @override Widget build(BuildContext context) => MaterialApp(
-    debugShowCheckedModeBanner: false,
-    title: 'VibeRush',
-    theme: ThemeData(useMaterial3: true, brightness: dark ? Brightness.dark : Brightness.light, colorSchemeSeed: const Color(0xFF8B5CF6), scaffoldBackgroundColor: dark ? const Color(0xFF09090B) : const Color(0xFFF7F7FB), fontFamily: 'sans'),
-    home: MainShell(onTheme: () => setState(() => dark = !dark)),
+  ThemeMode themeMode = ThemeMode.dark;
+
+  void changeTheme() {
+    setState(() {
+      themeMode =
+          themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'VibeRush',
+      debugShowCheckedModeBanner: false,
+      themeMode: themeMode,
+      theme: ThemeData(
+        brightness: Brightness.light,
+        useMaterial3: true,
+        colorSchemeSeed: Colors.deepPurple,
+        scaffoldBackgroundColor: const Color(0xFFF7F7FB),
+      ),
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        useMaterial3: true,
+        colorSchemeSeed: Colors.deepPurple,
+        scaffoldBackgroundColor: const Color(0xFF0B0B10),
+      ),
+      home: HomePage(
+        onThemeChanged: changeTheme,
+        isDark: themeMode == ThemeMode.dark,
+      ),
+    );
+  }
+}
+
+class HomePage extends StatefulWidget {
+  final VoidCallback onThemeChanged;
+  final bool isDark;
+
+  const HomePage({
+    super.key,
+    required this.onThemeChanged,
+    required this.isDark,
+  });
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  int selectedIndex = 0;
+
+  int points = 120;
+  int streak = 3;
+
+  String username = 'Vibe User';
+
+  bool challengeDone = false;
+
+  final List<String> challenges = <String>[
+    'Post your best sunset photo 🌅',
+    'Send a funny meme to a friend 😂',
+    'Share your current favorite song 🎵',
+    'Take a photo with your best friend 📸',
+    'Write one positive thing about today ✨',
+  ];
+
+  int challengeIndex = 0;
+
+  final List<int> pollVotes = <int>[42, 31, 27];
+
+  @override
+  void initState() {
+    super.initState();
+    loadData();
+  }
+
+  Future<void> loadData() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      points = prefs.getInt('points') ?? 120;
+      streak = prefs.getInt('streak') ?? 3;
+      username = prefs.getString('username') ?? 'Vibe User';
+      challengeDone = prefs.getBool('challengeDone') ?? false;
+      challengeIndex = prefs.getInt('challengeIndex') ?? 0;
+
+      if (challengeIndex >= challenges.length) {
+        challengeIndex = 0;
+      }
+    });
+  }
+
+  Future<void> saveData() async {
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+
+    await prefs.setInt('points', points);
+    await prefs.setInt('streak', streak);
+    await prefs.setString('username', username);
+    await prefs.setBool('challengeDone', challengeDone);
+    await prefs.setInt('challengeIndex', challengeIndex);
+  }
+
+  void showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(message),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+  }
+
+  Future<void> completeChallenge() async {
+    if (challengeDone) {
+      showMessage('Today\'s challenge is already completed 🔥');
+      return;
+    }
+
+    setState(() {
+      challengeDone = true;
+      points += 25;
+      streak += 1;
+    });
+
+    await saveData();
+
+    showMessage('+25 Vibe Points! 🔥');
+  }
+
+  Future<void> nextChallenge() async {
+    setState(() {
+      challengeIndex = (challengeIndex + 1) % challenges.length;
+      challengeDone = false;
+    });
+
+    await saveData();
+  }
+
+  Future<void> vote(int option) async {
+    setState(() {
+      pollVotes[option] += 1;
+      points += 5;
+    });
+
+    await saveData();
+
+    showMessage('+5 Vibe Points! Your vote has been counted.');
+  }
+
+  Future<void> editProfile() async {
+    final TextEditingController controller =
+        TextEditingController(text: username);
+
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Edit profile'),
+          content: TextField(
+            controller: controller,
+            maxLength: 20,
+            decoration: const InputDecoration(
+              labelText: 'Your name',
+              hintText: 'Enter your name',
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+              },
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final String newName = controller.text.trim();
+
+                if (newName.isNotEmpty) {
+                  setState(() {
+                    username = newName;
+                  });
+
+                  await saveData();
+                }
+
+                if (dialogContext.mounted) {
+                  Navigator.pop(dialogContext);
+                }
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> shareVibe() async {
+    await SharePlus.instance.share(
+      ShareParams(
+        text:
+            '🔥 I am using VibeRush!\n\nMy Vibe Score: $points points\nStreak: $streak days\n\nJoin the vibe! ⚡',
+        subject: 'VibeRush',
+      ),
+    );
+  }
+
+  void openCreate() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (BuildContext sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                const Text(
+                  'Create something',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ListTile(
+                  leading: const CircleAvatar(
+                    child: Icon(Icons.photo_camera_rounded),
+                  ),
+                  title: const Text('Create a Vibe Post'),
+                  subtitle: const Text('Share a moment with your friends'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    showMessage('Vibe Post creator coming soon 📸');
+                  },
+                ),
+                ListTile(
+                  leading: const CircleAvatar(
+                    child: Icon(Icons.poll_rounded),
+                  ),
+                  title: const Text('Create a Poll'),
+                  subtitle: const Text('Ask your friends a question'),
+                  onTap: () {
+                    Navigator.pop(sheetContext);
+                    showMessage('Poll creator opened 🗳️');
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> pages = <Widget>[
+      buildHome(),
+      buildChallengePage(),
+      buildLeaderboard(),
+      buildProfile(),
+    ];
+
+    return Scaffold(
+      appBar: AppBar(
+        titleSpacing: 18,
+        title: Row(
+          children: <Widget>[
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                gradient: const LinearGradient(
+                  colors: <Color>[
+                    Color(0xFF7C4DFF),
+                    Color(0xFFE040FB),
+                  ],
+                ),
+              ),
+              child: const Icon(
+                Icons.bolt_rounded,
+                color: Colors.white,
+              ),
+            ),
+            const SizedBox(width: 10),
+            const Text(
+              'VibeRush',
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.5,
+              ),
+            ),
+          ],
+        ),
+        actions: <Widget>[
+          IconButton(
+            tooltip: 'Share VibeRush',
+            onPressed: shareVibe,
+            icon: const Icon(Icons.share_rounded),
+          ),
+          IconButton(
+            tooltip: 'Theme',
+            onPressed: widget.onThemeChanged,
+            icon: Icon(
+              widget.isDark
+                  ? Icons.light_mode_rounded
+                  : Icons.dark_mode_rounded,
+            ),
+          ),
+          const SizedBox(width: 6),
+        ],
+      ),
+      body: IndexedStack(
+        index: selectedIndex,
+        children: pages,
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: openCreate,
+        child: const Icon(Icons.add_rounded),
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: selectedIndex,
+        onDestinationSelected: (int index) {
+          setState(() {
+            selectedIndex = index;
+          });
+        },
+        destinations: const <NavigationDestination>[
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.bolt_outlined),
+            selectedIcon: Icon(Icons.bolt_rounded),
+            label: 'Challenge',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.leaderboard_outlined),
+            selectedIcon: Icon(Icons.leaderboard_rounded),
+            label: 'Ranks',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded),
+            label: 'Profile',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildHome() {
+    return RefreshIndicator(
+      onRefresh: loadData,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 100),
+        children: <Widget>[
+          buildGreetingCard(),
+          const SizedBox(height: 18),
+          buildStats(),
+          const SizedBox(height: 18),
+          buildDailyChallengeCard(),
+          const SizedBox(height: 18),
+          buildPollCard(),
+          const SizedBox(height: 18),
+          buildShareCard(),
+          const SizedBox(height: 18),
+          buildAd(),
+        ],
+      ),
+    );
+  }
+
+  Widget buildGreetingCard() {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            Color(0xFF6C3BFF),
+            Color(0xFFE03BFF),
+          ],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Hey, $username 👋',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Ready to make today a little more fun?',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 18),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: Color(0xFF6C3BFF),
+            ),
+            onPressed: () {
+              setState(() {
+                selectedIndex = 1;
+              });
+            },
+            icon: const Icon(Icons.bolt_rounded),
+            label: const Text('Take today\'s challenge'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildStats() {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: statCard(
+            icon: Icons.local_fire_department_rounded,
+            value: '$streak',
+            label: 'Day streak',
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: statCard(
+            icon: Icons.stars_rounded,
+            value: '$points',
+            label: 'Vibe points',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget statCard({
+    required IconData icon,
+    required String value,
+    required String label,
+  }) {
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          children: <Widget>[
+            Icon(icon, size: 30),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            Text(
+              label,
+              style: TextStyle(
+                color: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.color
+                    ?.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildDailyChallengeCard() {
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                const Icon(Icons.bolt_rounded),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'DAILY CHALLENGE',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: nextChallenge,
+                  child: const Text('Next'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              challenges[challengeIndex],
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Complete it and earn 25 Vibe Points.',
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: completeChallenge,
+                child: Text(
+                  challengeDone ? 'Completed ✓' : 'Complete Challenge',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildPollCard() {
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Row(
+              children: <Widget>[
+                Icon(Icons.poll_rounded),
+                SizedBox(width: 8),
+                Text(
+                  'TODAY\'S POLL',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'What makes a perfect weekend?',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 14),
+            pollButton(0, '🎮 Gaming with friends'),
+            pollButton(1, '🍿 Movies + snacks'),
+            pollButton(2, '🌄 Going somewhere'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget pollButton(int index, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: OutlinedButton(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(double.infinity, 48),
+          alignment: Alignment.centerLeft,
+        ),
+        onPressed: () => vote(index),
+        child: Row(
+          children: <Widget>[
+            Expanded(child: Text(text)),
+            Text('${pollVotes[index]}%'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildShareCard() {
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: <Widget>[
+            const CircleAvatar(
+              radius: 28,
+              child: Icon(Icons.share_rounded),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Share your Vibe',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text('Invite your friends to VibeRush.'),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: shareVibe,
+              icon: const Icon(Icons.arrow_forward_rounded),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildChallengePage() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 100),
+      children: <Widget>[
+        const Text(
+          'Today\'s Vibe',
+          style: TextStyle(
+            fontSize: 30,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Do something fun and collect Vibe Points.',
+        ),
+        const SizedBox(height: 20),
+        buildDailyChallengeCard(),
+        const SizedBox(height: 18),
+        Card(
+          elevation: 0,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Text(
+                  'Your progress',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 15),
+                LinearProgressIndicator(
+                  value: (points % 100) / 100,
+                  minHeight: 10,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                const SizedBox(height: 10),
+                Text('${points % 100}/100 points until the next level'),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget buildLeaderboard() {
+    final List<Map<String, dynamic>> users = <Map<String, dynamic>>[
+      <String, dynamic>{
+        'name': username,
+        'points': points,
+        'you': true,
+      },
+      <String, dynamic>{
+        'name': 'Aarav',
+        'points': 285,
+        'you': false,
+      },
+      <String, dynamic>{
+        'name': 'Zoya',
+        'points': 240,
+        'you': false,
+      },
+      <String, dynamic>{
+        'name': 'Rohan',
+        'points': 210,
+        'you': false,
+      },
+      <String, dynamic>{
+        'name': 'Anaya',
+        'points': 185,
+        'you': false,
+      },
+    ];
+
+    users.sort(
+      (Map<String, dynamic> a, Map<String, dynamic> b) =>
+          (b['points'] as int).compareTo(a['points'] as int),
+    );
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 100),
+      children: <Widget>[
+        const Text(
+          'Vibe Rankings',
+          style: TextStyle(
+            fontSize: 30,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text('Climb the leaderboard with your Vibe Points.'),
+        const SizedBox(height: 20),
+        ...List<Widget>.generate(users.length, (int index) {
+          final Map<String, dynamic> user = users[index];
+
+          return Card(
+            elevation: 0,
+            margin: const EdgeInsets.only(bottom: 10),
+            child: ListTile(
+              leading: CircleAvatar(
+                child: Text('${index + 1}'),
+              ),
+              title: Text(
+                user['name'] as String,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              subtitle: user['you'] == true
+                  ? const Text('That\'s you')
+                  : const Text('VibeRush member'),
+              trailing: Text(
+                '${user['points']} ⚡',
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget buildProfile() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 24, 18, 100),
+      children: <Widget>[
+        Center(
+          child: CircleAvatar(
+            radius: 48,
+            child: Text(
+              username.isEmpty ? 'V' : username[0].toUpperCase(),
+              style: const TextStyle(
+                fontSize: 34,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Center(
+          child: Text(
+            username,
+            style: const TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Center(
+          child: Text('VibeRush member'),
+        ),
+        const SizedBox(height: 24),
+        Card(
+          elevation: 0,
+          child: Column(
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.edit_rounded),
+                title: const Text('Edit profile'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: editProfile,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.share_rounded),
+                title: const Text('Share VibeRush'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: shareVibe,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: Icon(
+                  widget.isDark
+                      ? Icons.light_mode_rounded
+                      : Icons.dark_mode_rounded,
+                ),
+                title: Text(
+                  widget.isDark ? 'Light mode' : 'Dark mode',
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: widget.onThemeChanged,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        buildAd(),
+      ],
+    );
+  }
+
+  Widget buildAd() {
+    return const AdBanner();
+  }
+}
+
+class AdBanner extends StatefulWidget {
+  const AdBanner({super.key});
+
+  @override
+  State<AdBanner> createState() => _AdBannerState();
+}
+
+class _AdBannerState extends State<AdBanner> {
+  BannerAd? bannerAd;
+  bool loaded = false;
+
+  static const String bannerId = String.fromEnvironment(
+    'ADMOB_BANNER_ID',
+    defaultValue: 'ca-app-pub-3940256099942544/6300978111',
   );
-}
 
-class AppStore extends ChangeNotifier {
-  late SharedPreferences prefs;
-  int score = 0, streak = 1;
-  String name = 'Vibe Friend';
-  Set<String> completed = {};
-  List<PollModel> polls = defaultPolls.map((p) => PollModel(p.question, List.of(p.options), List.of(p.votes))).toList();
-  Future<void> load() async {
-    prefs = await SharedPreferences.getInstance();
-    score = prefs.getInt('score') ?? 0; streak = prefs.getInt('streak') ?? 1; name = prefs.getString('name') ?? 'Vibe Friend';
-    completed = (prefs.getStringList('completed') ?? []).toSet();
-    final raw = prefs.getString('polls');
-    if (raw != null) polls = (jsonDecode(raw) as List).map((e) => PollModel.fromJson(e)).toList();
-    notifyListeners();
+  @override
+  void initState() {
+    super.initState();
+    loadAd();
   }
-  Future<void> save() async {
-    await prefs.setInt('score', score); await prefs.setInt('streak', streak); await prefs.setString('name', name);
-    await prefs.setStringList('completed', completed.toList()); await prefs.setString('polls', jsonEncode(polls.map((e) => e.toJson()).toList()));
-    notifyListeners();
+
+  void loadAd() {
+    final BannerAd ad = BannerAd(
+      adUnitId: bannerId,
+      request: const AdRequest(),
+      size: AdSize.banner,
+      listener: BannerAdListener(
+        onAdLoaded: (Ad ad) {
+          if (!mounted) {
+            return;
+          }
+
+          setState(() {
+            bannerAd = ad as BannerAd;
+            loaded = true;
+          });
+        },
+        onAdFailedToLoad: (Ad ad, LoadAdError error) {
+          ad.dispose();
+
+          if (!mounted) {
+            return;
+          }
+
+          setState(() {
+            loaded = false;
+          });
+        },
+      ),
+    );
+
+    ad.load();
   }
-  void addPoints(int p, String key) { if (completed.add(key)) { score += p; save(); } }
-}
 
-class MainShell extends StatefulWidget {
-  final VoidCallback onTheme;
-  const MainShell({super.key, required this.onTheme});
-  @override State<MainShell> createState() => _MainShellState();
-}
-class _MainShellState extends State<MainShell> {
-  final store = AppStore(); int tab = 0; bool loading = true; InterstitialAd? interstitial;
-  @override void initState() { super.initState(); store.load().then((_) { setState(() => loading = false); _loadAd(); }); }
-  void _loadAd() { InterstitialAd.load(adUnitId: AppConfig.interstitialId, request: const AdRequest(), adLoadCallback: InterstitialAdLoadCallback(onAdLoaded: (a) => interstitial = a, onAdFailedToLoad: (_) {})); }
-  void showAd() { final a = interstitial; if (a != null) { a.fullScreenContentCallback = FullScreenContentCallback(onAdDismissedFullScreenContent: (ad) { ad.dispose(); _loadAd(); }); a.show(); interstitial = null; } }
-  @override Widget build(BuildContext context) {
-    if (loading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    final pages = [HomePage(store: store, onAd: showAd), ChallengePage(store: store, onAd: showAd), PollPage(store: store), LeaderboardPage(store: store), ProfilePage(store: store, onTheme: widget.onTheme)];
-    return AnimatedBuilder(animation: store, builder: (_, __) => Scaffold(
-      body: SafeArea(child: pages[tab]),
-      bottomNavigationBar: NavigationBar(selectedIndex: tab, onDestinationSelected: (i) => setState(() => tab = i), destinations: const [NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'), NavigationDestination(icon: Icon(Icons.bolt_outlined), selectedIcon: Icon(Icons.bolt), label: 'Challenges'), NavigationDestination(icon: Icon(Icons.poll_outlined), selectedIcon: Icon(Icons.poll), label: 'Polls'), NavigationDestination(icon: Icon(Icons.emoji_events_outlined), selectedIcon: Icon(Icons.emoji_events), label: 'Ranks'), NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'You')]),
-    ));
+  @override
+  void dispose() {
+    bannerAd?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!loaded || bannerAd == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Center(
+      child: SizedBox(
+        width: bannerAd!.size.width.toDouble(),
+        height: bannerAd!.size.height.toDouble(),
+        child: AdWidget(ad: bannerAd!),
+      ),
+    );
   }
 }
-
-class AdBanner extends StatefulWidget { const AdBanner({super.key}); @override State<AdBanner> createState() => _AdBannerState(); }
-class _AdBannerState extends State<AdBanner> { BannerAd? ad; @override void initState(){super.initState(); ad=BannerAd(adUnitId: AppConfig.bannerId, size: AdSize.banner, request: const AdRequest(), listener: BannerAdListener(onAdFailedToLoad:(a,_)=>a.dispose()))..load();} @override void dispose(){ad?.dispose();super.dispose();} @override Widget build(BuildContext c)=>ad==null?const SizedBox(height:0):SizedBox(height:50,width:double.infinity,child:AdWidget(ad:ad!)); }
-
-Widget header(BuildContext context, String title, String subtitle) => Padding(padding: const EdgeInsets.fromLTRB(20, 20, 20, 12), child: Row(children: [Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(title, style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900)), const SizedBox(height: 4), Text(subtitle, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant))])), Container(width: 44,height:44,alignment:Alignment.center,decoration:BoxDecoration(shape:BoxShape.circle,color:Theme.of(context).colorScheme.primaryContainer),child:const Text('⚡',style:TextStyle(fontSize:22)))]));
-
-class HomePage extends StatelessWidget { final AppStore store; final VoidCallback onAd; const HomePage({super.key,required this.store,required this.onAd}); @override Widget build(BuildContext c)=>ListView(children:[header(c,'VibeRush','Your daily dose of fun'), Padding(padding:const EdgeInsets.symmetric(horizontal:16),child: _HeroCard(store:store,onAd:onAd)), const SizedBox(height:16), const AdBanner(), const SizedBox(height:12), Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:Text('Quick Vibes',style:Theme.of(c).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold))), const SizedBox(height:10), Padding(padding:const EdgeInsets.symmetric(horizontal:16),child:Row(children:[Expanded(child:_StatCard(icon:'🔥',value:'${store.streak}',label:'Day streak')),const SizedBox(width:10),Expanded(child:_StatCard(icon:'⭐',value:'${store.score}',label:'Vibe points')),const SizedBox(width:10),Expanded(child:_StatCard(icon:'🎯',value:'${store.completed.length}',label:'Completed'))])), const SizedBox(height:20), Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:Text('Today on VibeRush',style:Theme.of(c).textTheme.titleLarge?.copyWith(fontWeight:FontWeight.bold))), const SizedBox(height:8), ...challenges.take(3).map((x)=>ListTile(leading:CircleAvatar(child:Text(x.emoji)),title:Text(x.title,style:const TextStyle(fontWeight:FontWeight.w700)),subtitle:Text(x.subtitle,maxLines:1,overflow:TextOverflow.ellipsis),trailing:Text('+${x.points}'))), const SizedBox(height:30)]); }
-class _HeroCard extends StatelessWidget {final AppStore store;final VoidCallback onAd;const _HeroCard({required this.store,required this.onAd});@override Widget build(BuildContext c)=>Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(borderRadius:BorderRadius.circular(28),gradient:LinearGradient(begin:Alignment.topLeft,end:Alignment.bottomRight,colors:[Theme.of(c).colorScheme.primary,Theme.of(c).colorScheme.tertiary])),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('⚡ DAILY VIBE',style:TextStyle(fontWeight:FontWeight.w900,letterSpacing:1.5)),const SizedBox(height:8),Text(challenges[DateTime.now().day%challenges.length].title,style:const TextStyle(fontSize:26,fontWeight:FontWeight.w900)),const SizedBox(height:6),Text(challenges[DateTime.now().day%challenges.length].subtitle),const SizedBox(height:16),FilledButton.tonal(onPressed:(){onAd();},child:const Text('Take the challenge'))]));}
-class _StatCard extends StatelessWidget {final String icon,value,label;const _StatCard({required this.icon,required this.value,required this.label});@override Widget build(BuildContext c)=>Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:Theme.of(c).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(18)),child:Column(children:[Text(icon,style:const TextStyle(fontSize:24)),const SizedBox(height:5),Text(value,style:const TextStyle(fontWeight:FontWeight.w900,fontSize:18)),Text(label,style:TextStyle(fontSize:11,color:Theme.of(c).colorScheme.onSurfaceVariant),textAlign:TextAlign.center)]));}
-
-class ChallengePage extends StatelessWidget { final AppStore store; final VoidCallback onAd; const ChallengePage({super.key,required this.store,required this.onAd}); @override Widget build(BuildContext c)=>ListView(children:[header(c,'Challenges','Complete safe challenges, earn points'),...challenges.asMap().entries.map((e){final x=e.value;final key='${DateTime.now().year}-${DateTime.now().month}-${DateTime.now().day}-${e.key}';final done=store.completed.contains(key);return Padding(padding:const EdgeInsets.fromLTRB(16,6,16,6),child:Card(child:Padding(padding:const EdgeInsets.all(16),child:Row(children:[Container(width:54,height:54,alignment:Alignment.center,decoration:BoxDecoration(color:Theme.of(c).colorScheme.primaryContainer,borderRadius:BorderRadius.circular(16)),child:Text(x.emoji,style:const TextStyle(fontSize:27))),const SizedBox(width:14),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(x.title,style:const TextStyle(fontWeight:FontWeight.w800,fontSize:17)),const SizedBox(height:4),Text(x.subtitle,maxLines:2,overflow:TextOverflow.ellipsis),const SizedBox(height:6),Text('+${x.points} points',style:TextStyle(color:Theme.of(c).colorScheme.primary,fontWeight:FontWeight.bold))])),const SizedBox(width:8),IconButton(onPressed:done?null:(){showDialog(context:c,builder:(_)=>AlertDialog(title:Text('${x.emoji} ${x.title}'),content:Text(x.subtitle),actions:[TextButton(onPressed:(){Navigator.pop(c);},child:const Text('Later')),FilledButton(onPressed:(){store.addPoints(x.points,key);Navigator.pop(c);onAd();},child:const Text('Done'))]));},icon:Icon(done?Icons.check_circle:Icons.arrow_forward_rounded,color:done?Colors.green:null))]))));}),const SizedBox(height:30)]); }
-
-class PollPage extends StatefulWidget { final AppStore store; const PollPage({super.key,required this.store}); @override State<PollPage> createState()=>_PollPageState(); }
-class _PollPageState extends State<PollPage> { final Set<int> voted={}; @override Widget build(BuildContext c)=>ListView(children:[header(c,'Poll Zone','Vote, see the vibe, share it'),...widget.store.polls.asMap().entries.map((entry){final i=entry.key,p=entry.value;final total=p.votes.fold<int>(0,(a,b)=>a+b);return Padding(padding:const EdgeInsets.fromLTRB(16,6,16,8),child:Card(child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(p.question,style:const TextStyle(fontSize:19,fontWeight:FontWeight.w800)),const SizedBox(height:14),...p.options.asMap().entries.map((o){final percent=total==0?0:p.votes[o.key]/total;return Padding(padding:const EdgeInsets.only(bottom:8),child:InkWell(borderRadius:BorderRadius.circular(14),onTap:voted.contains(i)?null:(){setState((){p.votes[o.key]++;voted.add(i);});widget.store.save();},child:Stack(alignment:Alignment.center,children:[Container(height:48,decoration:BoxDecoration(color:Theme.of(c).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(14))),if(voted.contains(i))Align(alignment:Alignment.centerLeft,child:FractionallySizedBox(width:percent,child:Container(height:48,decoration:BoxDecoration(color:Theme.of(c).colorScheme.primaryContainer,borderRadius:BorderRadius.circular(14))))),Padding(padding:const EdgeInsets.symmetric(horizontal:14),child:Row(children:[Expanded(child:Text(o.value)),if(voted.contains(i))Text('${(percent*100).round()}%')]))])));})]))));}),const SizedBox(height:30)]); }
-
-class LeaderboardPage extends StatelessWidget { final AppStore store; const LeaderboardPage({super.key,required this.store}); @override Widget build(BuildContext c){final people=[['Aarav',980],['Zoya',870],['Kabir',760],['Mira',690],['You',store.score]]..sort((a,b)=>(b[1] as int).compareTo(a[1] as int));return ListView(children:[header(c,'Leaderboard','Friendly competition only 🫶'),Padding(padding:const EdgeInsets.all(16),child:Card(child:Padding(padding:const EdgeInsets.all(18),child:Column(children:[const Text('🏆',style:TextStyle(fontSize:50)),const Text('Your Vibe Score',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),Text('${store.score}',style:const TextStyle(fontSize:42,fontWeight:FontWeight.w900)),const SizedBox(height:8),Text('Keep completing challenges to grow your score.',style:TextStyle(color:Theme.of(c).colorScheme.onSurfaceVariant))])))),...people.asMap().entries.map((e)=>ListTile(leading:CircleAvatar(child:Text('${e.key+1}')),title:Text(e.value[0].toString(),style:const TextStyle(fontWeight:FontWeight.w700)),trailing:Text('${e.value[1]} pts',style:const TextStyle(fontWeight:FontWeight.bold)))),const SizedBox(height:30)]);}}
-
-class ProfilePage extends StatefulWidget { final AppStore store; final VoidCallback onTheme; const ProfilePage({super.key,required this.store,required this.onTheme}); @override State<ProfilePage> createState()=>_ProfilePageState(); }
-class _ProfilePageState extends State<ProfilePage>{final nameCtrl=TextEditingController();@override void initState(){super.initState();nameCtrl.text=widget.store.name;}@override void dispose(){nameCtrl.dispose();super.dispose();}@override Widget build(BuildContext c)=>ListView(children:[header(c,'Your Vibe','Make the app yours'),Center(child:Container(width:96,height:96,alignment:Alignment.center,decoration:BoxDecoration(shape:BoxShape.circle,color:Theme.of(c).colorScheme.primaryContainer),child:const Text('😎',style:TextStyle(fontSize:50)))),const SizedBox(height:12),Center(child:Text(widget.store.name,style:const TextStyle(fontSize:23,fontWeight:FontWeight.w900))),const SizedBox(height:20),Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:TextField(controller:nameCtrl,maxLength:24,decoration:const InputDecoration(labelText:'Display name',prefixIcon:Icon(Icons.badge_outlined),border:OutlineInputBorder()),onSubmitted:(v){if(v.trim().isNotEmpty){widget.store.name=v.trim();widget.store.save();setState((){});}})),Padding(padding:const EdgeInsets.symmetric(horizontal:20),child:FilledButton.icon(onPressed:(){final v=nameCtrl.text.trim();if(v.isNotEmpty){widget.store.name=v;widget.store.save();setState((){});FocusScope.of(c).unfocus();}},icon:const Icon(Icons.save),label:const Text('Save profile'))),const SizedBox(height:8),ListTile(leading:const Icon(Icons.dark_mode_outlined),title:const Text('Toggle theme'),subtitle:const Text('Switch between dark and light mode'),trailing:Switch(value:Theme.of(c).brightness==Brightness.dark,onChanged:(_)=>widget.onTheme())),ListTile(leading:const Icon(Icons.share_outlined),title:const Text('Share VibeRush'),subtitle:const Text('Invite your friends'),onTap:()async{await Share.share('⚡ I am using VibeRush! Join me for daily challenges, polls and fun.');}),ListTile(leading:const Icon(Icons.info_outline),title:const Text('About VibeRush'),subtitle:const Text('A fun social challenge app for friends.')),const SizedBox(height:30),const AdBanner()]);}
