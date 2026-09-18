@@ -1,9 +1,57 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Catch any error and show it on screen instead of crashing silently
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Material(
+      child: Container(
+        color: Colors.red,
+        padding: const EdgeInsets.all(20),
+        alignment: Alignment.center,
+        child: SingleChildScrollView(
+          child: Text(
+            'ERROR:\n\n${details.exceptionAsString()}\n\n${details.stack}',
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
+        ),
+      ),
+    );
+  };
+
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+  };
+
+  runZonedGuarded<void>(() {
+    MobileAds.instance.initialize();
+    runApp(const VibeRushApp());
+  }, (Object error, StackTrace stack) {
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          backgroundColor: Colors.red,
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: SingleChildScrollView(
+                child: Text(
+                  'CRASH:\n\n$error\n\n$stack',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  });
+}
   WidgetsFlutterBinding.ensureInitialized();
 
   MobileAds.instance.initialize();
