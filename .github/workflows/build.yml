@@ -1,1 +1,142 @@
+name: Build VibeRush APK
 
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Show Flutter version
+        run: |
+          flutter --version
+          dart --version
+
+      - name: Create Android project
+        run: |
+          flutter create \
+            --platforms=android \
+            --org com.viberush.app \
+            --project-name viberush \
+            .
+
+      - name: Configure Android SDK
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("android/app/build.gradle.kts")
+
+          if not p.exists():
+              raise SystemExit("android/app/build.gradle.kts was not found")
+
+          s = p.read_text()
+
+          s = s.replace(
+              "compileSdk = flutter.compileSdkVersion",
+              "compileSdk = 35"
+          )
+
+          s = s.replace(
+              "targetSdk = flutter.targetSdkVersion",
+              "targetSdk = 35"
+          )
+
+          s = s.replace(
+              "minSdk = flutter.minSdkVersion",
+              "minSdk = 21"
+          )
+
+          p.write_text(s)
+          PY
+
+      - name: Configure AdMob App ID
+        shell: bash
+        env:
+          ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
+        run: |
+          APP_ID="${ADMOB_APP_ID:-ca-app-pub-3940256099942544~3347511713}"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+
+          if not manifest.exists():
+              raise SystemExit("AndroidManifest.xml was not found")
+
+          text = manifest.read_text()
+
+          app_id = os.environ["ADMOB_APP_ID"]
+
+          meta = f'''
+          <meta-data
+              android:name="com.google.android.gms.ads.APPLICATION_ID"
+              android:value="{app_id}" />'''
+
+          if "com.google.android.gms.ads.APPLICATION_ID" not in text:
+              text = text.replace(
+                  "</application>",
+                  meta + "\n        </application>"
+              )
+
+          manifest.write_text(text)
+          PY
+
+      - name: Get Flutter packages
+        run: |
+          flutter pub get
+
+      - name: Analyze Flutter project
+        run: |
+          flutter analyze
+
+      - name: Build release APK
+        env:
+          ADMOB_BANNER_ID: ${{ secrets.ADMOB_BANNER_ID }}
+          ADMOB_INTERSTITIAL_ID: ${{ secrets.ADMOB_INTERSTITIAL_ID }}
+        run: |
+          BANNER_ID="${ADMOB_BANNER_ID:-ca-app-pub-3940256099942544/6300978111}"
+          INTERSTITIAL_ID="${ADMOB_INTERSTITIAL_ID:-ca-app-pub-3940256099942544/1033173712}"
+
+          flutter build apk \
+            --release \
+            --no-tree-shake-icons \
+            --dart-define=ADMOB_BANNER_ID="$BANNER_ID" \
+            --dart-define=ADMOB_INTERSTITIAL_ID="$INTERSTITIAL_ID"
+
+      - name: Verify APK
+        run: |
+          ls -lh build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VibeRush-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
