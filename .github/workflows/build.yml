@@ -65,12 +65,12 @@ jobs:
 
           text = text.replace(
               "compileSdk = flutter.compileSdkVersion",
-              "compileSdk = 35"
+              "compileSdk = 36"
           )
 
           text = text.replace(
               "targetSdk = flutter.targetSdkVersion",
-              "targetSdk = 35"
+              "targetSdk = 36"
           )
 
           text = text.replace(
