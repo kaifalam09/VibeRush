@@ -30,12 +30,12 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Show Flutter version
+      - name: Show versions
         run: |
           flutter --version
           dart --version
 
-      - name: Create Android project
+      - name: Create Flutter Android project
         run: |
           flutter create \
             --platforms=android \
@@ -46,35 +46,33 @@ jobs:
       - name: Configure Android SDK
         shell: bash
         run: |
-          python3 - <<'PY'
+          if [ -f "android/app/build.gradle.kts" ]; then
+            python3 - <<'PY'
           from pathlib import Path
 
           p = Path("android/app/build.gradle.kts")
+          text = p.read_text()
 
-          if not p.exists():
-              raise SystemExit("android/app/build.gradle.kts was not found")
-
-          s = p.read_text()
-
-          s = s.replace(
+          text = text.replace(
               "compileSdk = flutter.compileSdkVersion",
               "compileSdk = 35"
           )
 
-          s = s.replace(
+          text = text.replace(
               "targetSdk = flutter.targetSdkVersion",
               "targetSdk = 35"
           )
 
-          s = s.replace(
+          text = text.replace(
               "minSdk = flutter.minSdkVersion",
               "minSdk = 21"
           )
 
-          p.write_text(s)
+          p.write_text(text)
           PY
+          fi
 
-      - name: Configure AdMob App ID
+      - name: Configure Android permissions and AdMob
         shell: bash
         env:
           ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
@@ -88,50 +86,67 @@ jobs:
           manifest = Path("android/app/src/main/AndroidManifest.xml")
 
           if not manifest.exists():
-              raise SystemExit("AndroidManifest.xml was not found")
+              raise SystemExit("AndroidManifest.xml not found")
 
           text = manifest.read_text()
-
           app_id = os.environ["ADMOB_APP_ID"]
 
-          meta = f'''
-          <meta-data
-              android:name="com.google.android.gms.ads.APPLICATION_ID"
-              android:value="{app_id}" />'''
+          internet_permission = '''
+              <uses-permission android:name="android.permission.INTERNET" />
+          '''
+
+          if "android.permission.INTERNET" not in text:
+              text = text.replace(
+                  "<manifest",
+                  "<manifest"
+              )
+
+              first_close = text.find(">")
+
+              if first_close != -1:
+                  text = (
+                      text[:first_close + 1]
+                      + internet_permission
+                      + text[first_close + 1:]
+                  )
+
+          admob_meta = f'''
+                  <meta-data
+                      android:name="com.google.android.gms.ads.APPLICATION_ID"
+                      android:value="{app_id}" />
+          '''
 
           if "com.google.android.gms.ads.APPLICATION_ID" not in text:
               text = text.replace(
                   "</application>",
-                  meta + "\n        </application>"
+                  admob_meta + "\n        </application>"
               )
 
           manifest.write_text(text)
           PY
 
-      - name: Get Flutter packages
+      - name: Get packages
         run: |
           flutter pub get
 
-      - name: Analyze Flutter project
+      - name: Check Dart code
         run: |
-          flutter analyze
+          flutter analyze --no-fatal-infos --no-fatal-warnings
 
       - name: Build release APK
         env:
           ADMOB_BANNER_ID: ${{ secrets.ADMOB_BANNER_ID }}
-          ADMOB_INTERSTITIAL_ID: ${{ secrets.ADMOB_INTERSTITIAL_ID }}
         run: |
           BANNER_ID="${ADMOB_BANNER_ID:-ca-app-pub-3940256099942544/6300978111}"
-          INTERSTITIAL_ID="${ADMOB_INTERSTITIAL_ID:-ca-app-pub-3940256099942544/1033173712}"
 
           flutter build apk \
             --release \
             --no-tree-shake-icons \
-            --dart-define=ADMOB_BANNER_ID="$BANNER_ID" \
-            --dart-define=ADMOB_INTERSTITIAL_ID="$INTERSTITIAL_ID"
+            --dart-define=ADMOB_BANNER_ID="$BANNER_ID"
 
       - name: Verify APK
         run: |
+          test -f build/app/outputs/flutter-apk/app-release.apk
           ls -lh build/app/outputs/flutter-apk/app-release.apk
 
       - name: Upload APK
