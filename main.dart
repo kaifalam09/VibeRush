@@ -1,10 +1,65 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const VibeRushApp());
+
+  ErrorWidget.builder = (FlutterErrorDetails details) {
+    return Material(
+      child: Container(
+        color: Colors.red,
+        padding: const EdgeInsets.all(20),
+        alignment: Alignment.center,
+        child: SingleChildScrollView(
+          child: Text(
+            'ERROR:\n\n${details.exceptionAsString()}\n\n${details.stack}',
+            style: const TextStyle(color: Colors.white, fontSize: 12),
+          ),
+        ),
+      ),
+    );
+  };
+
+  FlutterError.onError = (FlutterErrorDetails details) {
+    FlutterError.presentError(details);
+  };
+
+  runZonedGuarded<void>(() async {
+    await Firebase.initializeApp();
+
+    try {
+      await MobileAds.instance.initialize();
+    } catch (_) {
+      // Ads not critical — app still works without them.
+    }
+
+    runApp(const VibeRushApp());
+  }, (Object error, StackTrace stack) {
+    runApp(
+      MaterialApp(
+        home: Scaffold(
+          backgroundColor: Colors.red,
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: SingleChildScrollView(
+                child: Text(
+                  'CRASH:\n\n$error\n\n$stack',
+                  style: const TextStyle(color: Colors.white, fontSize: 12),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  });
 }
 
 class VibeRushApp extends StatefulWidget {
@@ -42,9 +97,255 @@ class _VibeRushAppState extends State<VibeRushApp> {
         colorSchemeSeed: Colors.deepPurple,
         scaffoldBackgroundColor: const Color(0xFF0B0B10),
       ),
-      home: HomePage(
+      home: AuthGate(
         onThemeChanged: changeTheme,
         isDark: themeMode == ThemeMode.dark,
+      ),
+    );
+  }
+}
+
+class AuthGate extends StatelessWidget {
+  final VoidCallback onThemeChanged;
+  final bool isDark;
+
+  const AuthGate({
+    super.key,
+    required this.onThemeChanged,
+    required this.isDark,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<User?>(
+      stream: FirebaseAuth.instance.authStateChanges(),
+      builder: (BuildContext context, AsyncSnapshot<User?> snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasData) {
+          return HomePage(
+            onThemeChanged: onThemeChanged,
+            isDark: isDark,
+          );
+        }
+
+        return AuthScreen(onThemeChanged: onThemeChanged, isDark: isDark);
+      },
+    );
+  }
+}
+
+class AuthScreen extends StatefulWidget {
+  final VoidCallback onThemeChanged;
+  final bool isDark;
+
+  const AuthScreen({
+    super.key,
+    required this.onThemeChanged,
+    required this.isDark,
+  });
+
+  @override
+  State<AuthScreen> createState() => _AuthScreenState();
+}
+
+class _AuthScreenState extends State<AuthScreen> {
+  bool isLoginMode = true;
+  bool isLoading = false;
+  String? errorMessage;
+
+  final TextEditingController emailController = TextEditingController();
+  final TextEditingController passwordController = TextEditingController();
+  final TextEditingController usernameController = TextEditingController();
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    usernameController.dispose();
+    super.dispose();
+  }
+
+  Future<void> submit() async {
+    final String email = emailController.text.trim();
+    final String password = passwordController.text.trim();
+    final String username = usernameController.text.trim();
+
+    if (email.isEmpty || password.isEmpty) {
+      setState(() {
+        errorMessage = 'Email aur password bharo';
+      });
+      return;
+    }
+
+    if (!isLoginMode && username.isEmpty) {
+      setState(() {
+        errorMessage = 'Username bharo';
+      });
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+      errorMessage = null;
+    });
+
+    try {
+      if (isLoginMode) {
+        await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+      } else {
+        final UserCredential cred =
+            await FirebaseAuth.instance.createUserWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+
+        final String uid = cred.user!.uid;
+        final String usernameLower = username.toLowerCase();
+
+        await FirebaseFirestore.instance.collection('users').doc(uid).set(
+          <String, dynamic>{
+            'uid': uid,
+            'username': username,
+            'usernameLower': usernameLower,
+            'email': email,
+            'points': 120,
+            'streak': 3,
+            'createdAt': FieldValue.serverTimestamp(),
+          },
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      setState(() {
+        errorMessage = e.message ?? 'Kuch galat ho gaya';
+      });
+    } catch (e) {
+      setState(() {
+        errorMessage = e.toString();
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: <Widget>[
+                Container(
+                  width: 70,
+                  height: 70,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(20),
+                    gradient: const LinearGradient(
+                      colors: <Color>[
+                        Color(0xFF7C4DFF),
+                        Color(0xFFE040FB),
+                      ],
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.bolt_rounded,
+                    color: Colors.white,
+                    size: 36,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  isLoginMode ? 'Welcome back' : 'Join VibeRush',
+                  style: const TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                if (!isLoginMode)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: TextField(
+                      controller: usernameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Username',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ),
+                TextField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: passwordController,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Password',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                if (errorMessage != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text(
+                      errorMessage!,
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                  ),
+                const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: isLoading ? null : submit,
+                    child: isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : Text(isLoginMode ? 'Login' : 'Sign Up'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      isLoginMode = !isLoginMode;
+                      errorMessage = null;
+                    });
+                  },
+                  child: Text(
+                    isLoginMode
+                        ? 'Account nahi hai? Sign up karo'
+                        : 'Pehle se account hai? Login karo',
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -102,7 +403,6 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       points = prefs.getInt('points') ?? 120;
       streak = prefs.getInt('streak') ?? 3;
-      username = prefs.getString('username') ?? 'Vibe User';
       challengeDone = prefs.getBool('challengeDone') ?? false;
       challengeIndex = prefs.getInt('challengeIndex') ?? 0;
 
@@ -110,6 +410,32 @@ class _HomePageState extends State<HomePage> {
         challengeIndex = 0;
       }
     });
+
+    await loadUsername();
+  }
+
+  Future<void> loadUsername() async {
+    final User? user = FirebaseAuth.instance.currentUser;
+
+    if (user == null) {
+      return;
+    }
+
+    final DocumentSnapshot<Map<String, dynamic>> doc = await FirebaseFirestore
+        .instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    if (!mounted) {
+      return;
+    }
+
+    if (doc.exists) {
+      setState(() {
+        username = (doc.data()?['username'] as String?) ?? 'Vibe User';
+      });
+    }
   }
 
   Future<void> saveData() async {
@@ -117,9 +443,20 @@ class _HomePageState extends State<HomePage> {
 
     await prefs.setInt('points', points);
     await prefs.setInt('streak', streak);
-    await prefs.setString('username', username);
     await prefs.setBool('challengeDone', challengeDone);
     await prefs.setInt('challengeIndex', challengeIndex);
+
+    final User? user = FirebaseAuth.instance.currentUser;
+
+    if (user != null) {
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(user.uid)
+          .update(<String, dynamic>{
+        'points': points,
+        'streak': streak,
+      });
+    }
   }
 
   void showMessage(String message) {
@@ -203,7 +540,17 @@ class _HomePageState extends State<HomePage> {
                     username = newName;
                   });
 
-                  await saveData();
+                  final User? user = FirebaseAuth.instance.currentUser;
+
+                  if (user != null) {
+                    await FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(user.uid)
+                        .update(<String, dynamic>{
+                      'username': newName,
+                      'usernameLower': newName.toLowerCase(),
+                    });
+                  }
                 }
 
                 if (dialogContext.mounted) {
@@ -226,6 +573,10 @@ class _HomePageState extends State<HomePage> {
         subject: 'VibeRush',
       ),
     );
+  }
+
+  Future<void> signOut() async {
+    await FirebaseAuth.instance.signOut();
   }
 
   void openCreate() {
@@ -282,7 +633,7 @@ class _HomePageState extends State<HomePage> {
     final List<Widget> pages = <Widget>[
       buildHome(),
       buildChallengePage(),
-      buildLeaderboard(),
+      const FriendsPage(),
       buildProfile(),
     ];
 
@@ -363,494 +714,9 @@ class _HomePageState extends State<HomePage> {
             label: 'Challenge',
           ),
           NavigationDestination(
-            icon: Icon(Icons.leaderboard_outlined),
-            selectedIcon: Icon(Icons.leaderboard_rounded),
-            label: 'Ranks',
+            icon: Icon(Icons.people_outline_rounded),
+            selectedIcon: Icon(Icons.people_rounded),
+            label: 'Friends',
           ),
           NavigationDestination(
-            icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'Profile',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget buildHome() {
-    return RefreshIndicator(
-      onRefresh: loadData,
-      child: ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(18, 10, 18, 100),
-        children: <Widget>[
-          buildGreetingCard(),
-          const SizedBox(height: 18),
-          buildStats(),
-          const SizedBox(height: 18),
-          buildDailyChallengeCard(),
-          const SizedBox(height: 18),
-          buildPollCard(),
-          const SizedBox(height: 18),
-          buildShareCard(),
-        ],
-      ),
-    );
-  }
-
-  Widget buildGreetingCard() {
-    return Container(
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(28),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[
-            Color(0xFF6C3BFF),
-            Color(0xFFE03BFF),
-          ],
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            'Hey, $username 👋',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Ready to make today a little more fun?',
-            style: TextStyle(
-              color: Colors.white70,
-              fontSize: 15,
-            ),
-          ),
-          const SizedBox(height: 18),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: const Color(0xFF6C3BFF),
-            ),
-            onPressed: () {
-              setState(() {
-                selectedIndex = 1;
-              });
-            },
-            icon: const Icon(Icons.bolt_rounded),
-            label: const Text('Take today\'s challenge'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget buildStats() {
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: statCard(
-            icon: Icons.local_fire_department_rounded,
-            value: '$streak',
-            label: 'Day streak',
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: statCard(
-            icon: Icons.stars_rounded,
-            value: '$points',
-            label: 'Vibe points',
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget statCard({
-    required IconData icon,
-    required String value,
-    required String label,
-  }) {
-    return Card(
-      elevation: 0,
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          children: <Widget>[
-            Icon(icon, size: 30),
-            const SizedBox(height: 8),
-            Text(
-              value,
-              style: const TextStyle(
-                fontSize: 25,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            Text(
-              label,
-              style: TextStyle(
-                color: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.color
-                    ?.withValues(alpha: 0.7),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget buildDailyChallengeCard() {
-    return Card(
-      elevation: 0,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                const Icon(Icons.bolt_rounded),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'DAILY CHALLENGE',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 1,
-                    ),
-                  ),
-                ),
-                TextButton(
-                  onPressed: nextChallenge,
-                  child: const Text('Next'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              challenges[challengeIndex],
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'Complete it and earn 25 Vibe Points.',
-            ),
-            const SizedBox(height: 18),
-            SizedBox(
-              width: double.infinity,
-              child: FilledButton(
-                onPressed: completeChallenge,
-                child: Text(
-                  challengeDone ? 'Completed ✓' : 'Complete Challenge',
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget buildPollCard() {
-    return Card(
-      elevation: 0,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            const Row(
-              children: <Widget>[
-                Icon(Icons.poll_rounded),
-                SizedBox(width: 8),
-                Text(
-                  'TODAY\'S POLL',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              'What makes a perfect weekend?',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 14),
-            pollButton(0, '🎮 Gaming with friends'),
-            pollButton(1, '🍿 Movies + snacks'),
-            pollButton(2, '🌄 Going somewhere'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget pollButton(int index, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: OutlinedButton(
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size(double.infinity, 48),
-          alignment: Alignment.centerLeft,
-        ),
-        onPressed: () => vote(index),
-        child: Row(
-          children: <Widget>[
-            Expanded(child: Text(text)),
-            Text('${pollVotes[index]}%'),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget buildShareCard() {
-    return Card(
-      elevation: 0,
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: <Widget>[
-            const CircleAvatar(
-              radius: 28,
-              child: Icon(Icons.share_rounded),
-            ),
-            const SizedBox(width: 14),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Share your Vibe',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  SizedBox(height: 4),
-                  Text('Invite your friends to VibeRush.'),
-                ],
-              ),
-            ),
-            IconButton(
-              onPressed: shareVibe,
-              icon: const Icon(Icons.arrow_forward_rounded),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget buildChallengePage() {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 100),
-      children: <Widget>[
-        const Text(
-          'Today\'s Vibe',
-          style: TextStyle(
-            fontSize: 30,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'Do something fun and collect Vibe Points.',
-        ),
-        const SizedBox(height: 20),
-        buildDailyChallengeCard(),
-        const SizedBox(height: 18),
-        Card(
-          elevation: 0,
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                const Text(
-                  'Your progress',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 15),
-                LinearProgressIndicator(
-                  value: (points % 100) / 100,
-                  minHeight: 10,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                const SizedBox(height: 10),
-                Text('${points % 100}/100 points until the next level'),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget buildLeaderboard() {
-    final List<Map<String, dynamic>> users = <Map<String, dynamic>>[
-      <String, dynamic>{
-        'name': username,
-        'points': points,
-        'you': true,
-      },
-      <String, dynamic>{
-        'name': 'Aarav',
-        'points': 285,
-        'you': false,
-      },
-      <String, dynamic>{
-        'name': 'Zoya',
-        'points': 240,
-        'you': false,
-      },
-      <String, dynamic>{
-        'name': 'Rohan',
-        'points': 210,
-        'you': false,
-      },
-      <String, dynamic>{
-        'name': 'Anaya',
-        'points': 185,
-        'you': false,
-      },
-    ];
-
-    users.sort(
-      (Map<String, dynamic> a, Map<String, dynamic> b) =>
-          (b['points'] as int).compareTo(a['points'] as int),
-    );
-
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 100),
-      children: <Widget>[
-        const Text(
-          'Vibe Rankings',
-          style: TextStyle(
-            fontSize: 30,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-        const SizedBox(height: 8),
-        const Text('Climb the leaderboard with your Vibe Points.'),
-        const SizedBox(height: 20),
-        ...List<Widget>.generate(users.length, (int index) {
-          final Map<String, dynamic> user = users[index];
-
-          return Card(
-            elevation: 0,
-            margin: const EdgeInsets.only(bottom: 10),
-            child: ListTile(
-              leading: CircleAvatar(
-                child: Text('${index + 1}'),
-              ),
-              title: Text(
-                user['name'] as String,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              subtitle: user['you'] == true
-                  ? const Text('That\'s you')
-                  : const Text('VibeRush member'),
-              trailing: Text(
-                '${user['points']} ⚡',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget buildProfile() {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 24, 18, 100),
-      children: <Widget>[
-        Center(
-          child: CircleAvatar(
-            radius: 48,
-            child: Text(
-              username.isEmpty ? 'V' : username[0].toUpperCase(),
-              style: const TextStyle(
-                fontSize: 34,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 14),
-        Center(
-          child: Text(
-            username,
-            style: const TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        const Center(
-          child: Text('VibeRush member'),
-        ),
-        const SizedBox(height: 24),
-        Card(
-          elevation: 0,
-          child: Column(
-            children: <Widget>[
-              ListTile(
-                leading: const Icon(Icons.edit_rounded),
-                title: const Text('Edit profile'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: editProfile,
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: const Icon(Icons.share_rounded),
-                title: const Text('Share VibeRush'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: shareVibe,
-              ),
-              const Divider(height: 1),
-              ListTile(
-                leading: Icon(
-                  widget.isDark
-                      ? Icons.light_mode_rounded
-                      : Icons.dark_mode_rounded,
-                ),
-                title: Text(
-                  widget.isDark ? 'Light mode' : 'Dark mode',
-                ),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: widget.onThemeChanged,
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
+            icon: Icon(Icons.person_outline
