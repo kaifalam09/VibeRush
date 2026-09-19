@@ -53,6 +53,46 @@ jobs:
         run: |
           rm -f test/widget_test.dart
 
+      - name: Configure Firebase
+        shell: bash
+        run: |
+          if [ -f "google-services.json" ]; then
+            cp google-services.json android/app/google-services.json
+          else
+            echo "ERROR: google-services.json not found in repo root"
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          # 1. Add google-services plugin to settings.gradle.kts
+          settings = Path("android/settings.gradle.kts")
+          text = settings.read_text()
+
+          marker = 'id("dev.flutter.flutter-plugin-loader") version "1.0.0"'
+
+          if marker in text and "com.google.gms.google-services" not in text:
+              text = text.replace(
+                  marker,
+                  marker + '\n    id("com.google.gms.google-services") version "4.4.2" apply false'
+              )
+              settings.write_text(text)
+
+          # 2. Apply google-services plugin in app/build.gradle.kts
+          app_gradle = Path("android/app/build.gradle.kts")
+          text = app_gradle.read_text()
+
+          marker2 = 'id("dev.flutter.flutter-gradle-plugin")'
+
+          if marker2 in text and "com.google.gms.google-services" not in text:
+              text = text.replace(
+                  marker2,
+                  marker2 + '\n    id("com.google.gms.google-services")'
+              )
+              app_gradle.write_text(text)
+          PY
+
       - name: Configure Android SDK
         shell: bash
         run: |
@@ -102,7 +142,6 @@ jobs:
           text = manifest.read_text()
           app_id = os.environ["ADMOB_APP_ID"]
 
-          # Find the opening <manifest ...> tag specifically, not any '>'
           manifest_tag_match = re.search(r"<manifest\b[^>]*>", text)
 
           if not manifest_tag_match:
