@@ -719,4 +719,520 @@ class _HomePageState extends State<HomePage> {
             label: 'Friends',
           ),
           NavigationDestination(
-            icon: Icon(Icons.person_outline
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded),
+            label: 'Profile',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildHome() {
+    return RefreshIndicator(
+      onRefresh: loadData,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(18, 10, 18, 100),
+        children: <Widget>[
+          buildGreetingCard(),
+          const SizedBox(height: 18),
+          buildStats(),
+          const SizedBox(height: 18),
+          buildDailyChallengeCard(),
+          const SizedBox(height: 18),
+          buildPollCard(),
+          const SizedBox(height: 18),
+          buildShareCard(),
+          const SizedBox(height: 18),
+          const AdBanner(),
+        ],
+      ),
+    );
+  }
+
+  Widget buildGreetingCard() {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[
+            Color(0xFF6C3BFF),
+            Color(0xFFE03BFF),
+          ],
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Hey, $username 👋',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Ready to make today a little more fun?',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 18),
+          FilledButton.icon(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.white,
+              foregroundColor: const Color(0xFF6C3BFF),
+            ),
+            onPressed: () {
+              setState(() {
+                selectedIndex = 1;
+              });
+            },
+            icon: const Icon(Icons.bolt_rounded),
+            label: const Text('Take today\'s challenge'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget buildStats() {
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: statCard(
+            icon: Icons.local_fire_department_rounded,
+            value: '$streak',
+            label: 'Day streak',
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: statCard(
+            icon: Icons.stars_rounded,
+            value: '$points',
+            label: 'Vibe points',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget statCard({
+    required IconData icon,
+    required String value,
+    required String label,
+  }) {
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          children: <Widget>[
+            Icon(icon, size: 30),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 25,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            Text(
+              label,
+              style: TextStyle(
+                color: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.color
+                    ?.withValues(alpha: 0.7),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildDailyChallengeCard() {
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                const Icon(Icons.bolt_rounded),
+                const SizedBox(width: 8),
+                const Expanded(
+                  child: Text(
+                    'DAILY CHALLENGE',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ),
+                TextButton(
+                  onPressed: nextChallenge,
+                  child: const Text('Next'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              challenges[challengeIndex],
+              style: const TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Complete it and earn 25 Vibe Points.',
+            ),
+            const SizedBox(height: 18),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: completeChallenge,
+                child: Text(
+                  challengeDone ? 'Completed ✓' : 'Complete Challenge',
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildPollCard() {
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Row(
+              children: <Widget>[
+                Icon(Icons.poll_rounded),
+                SizedBox(width: 8),
+                Text(
+                  'TODAY\'S POLL',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'What makes a perfect weekend?',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 14),
+            pollButton(0, '🎮 Gaming with friends'),
+            pollButton(1, '🍿 Movies + snacks'),
+            pollButton(2, '🌄 Going somewhere'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget pollButton(int index, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: OutlinedButton(
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size(double.infinity, 48),
+          alignment: Alignment.centerLeft,
+        ),
+        onPressed: () => vote(index),
+        child: Row(
+          children: <Widget>[
+            Expanded(child: Text(text)),
+            Text('${pollVotes[index]}%'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildShareCard() {
+    return Card(
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Row(
+          children: <Widget>[
+            const CircleAvatar(
+              radius: 28,
+              child: Icon(Icons.share_rounded),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Share your Vibe',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text('Invite your friends to VibeRush.'),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: shareVibe,
+              icon: const Icon(Icons.arrow_forward_rounded),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget buildChallengePage() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 100),
+      children: <Widget>[
+        const Text(
+          'Today\'s Vibe',
+          style: TextStyle(
+            fontSize: 30,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Do something fun and collect Vibe Points.',
+        ),
+        const SizedBox(height: 20),
+        buildDailyChallengeCard(),
+        const SizedBox(height: 18),
+        Card(
+          elevation: 0,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const Text(
+                  'Your progress',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 15),
+                LinearProgressIndicator(
+                  value: (points % 100) / 100,
+                  minHeight: 10,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                const SizedBox(height: 10),
+                Text('${points % 100}/100 points until the next level'),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget buildProfile() {
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(18, 24, 18, 100),
+      children: <Widget>[
+        Center(
+          child: CircleAvatar(
+            radius: 48,
+            child: Text(
+              username.isEmpty ? 'V' : username[0].toUpperCase(),
+              style: const TextStyle(
+                fontSize: 34,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Center(
+          child: Text(
+            username,
+            style: const TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Center(
+          child: Text('VibeRush member'),
+        ),
+        const SizedBox(height: 24),
+        Card(
+          elevation: 0,
+          child: Column(
+            children: <Widget>[
+              ListTile(
+                leading: const Icon(Icons.edit_rounded),
+                title: const Text('Edit profile'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: editProfile,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.share_rounded),
+                title: const Text('Share VibeRush'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: shareVibe,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: Icon(
+                  widget.isDark
+                      ? Icons.light_mode_rounded
+                      : Icons.dark_mode_rounded,
+                ),
+                title: Text(
+                  widget.isDark ? 'Light mode' : 'Dark mode',
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: widget.onThemeChanged,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.logout_rounded),
+                title: const Text('Log out'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: signOut,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        const AdBanner(),
+      ],
+    );
+  }
+}
+
+class FriendsPage extends StatelessWidget {
+  const FriendsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Padding(
+        padding: EdgeInsets.all(24),
+        child: Text(
+          'Friends feature coming in the next update 👀',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 16),
+        ),
+      ),
+    );
+  }
+}
+
+class AdBanner extends StatefulWidget {
+  const AdBanner({super.key});
+
+  @override
+  State<AdBanner> createState() => _AdBannerState();
+}
+
+class _AdBannerState extends State<AdBanner> {
+  BannerAd? bannerAd;
+  bool loaded = false;
+
+  static const String bannerId = String.fromEnvironment(
+    'ADMOB_BANNER_ID',
+    defaultValue: 'ca-app-pub-3940256099942544/6300978111',
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    loadAd();
+  }
+
+  void loadAd() {
+    try {
+      final BannerAd ad = BannerAd(
+        adUnitId: bannerId,
+        request: const AdRequest(),
+        size: AdSize.banner,
+        listener: BannerAdListener(
+          onAdLoaded: (Ad ad) {
+            if (!mounted) {
+              return;
+            }
+
+            setState(() {
+              bannerAd = ad as BannerAd;
+              loaded = true;
+            });
+          },
+          onAdFailedToLoad: (Ad ad, LoadAdError error) {
+            ad.dispose();
+
+            if (!mounted) {
+              return;
+            }
+
+            setState(() {
+              loaded = false;
+            });
+          },
+        ),
+      );
+
+      ad.load();
+    } catch (_) {
+      // If ads fail to initialize, just skip them silently.
+    }
+  }
+
+  @override
+  void dispose() {
+    bannerAd?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!loaded || bannerAd == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Center(
+      child: SizedBox(
+        width: bannerAd!.size.width.toDouble(),
+        height: bannerAd!.size.height.toDouble(),
+        child: AdWidget(ad: bannerAd!),
+      ),
+    );
+  }
+}
