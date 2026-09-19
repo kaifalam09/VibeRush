@@ -1,5 +1,5 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
@@ -51,12 +51,6 @@ void main() {
       ),
     );
   });
-}
-  WidgetsFlutterBinding.ensureInitialized();
-
-  MobileAds.instance.initialize();
-
-  runApp(const VibeRushApp());
 }
 
 class VibeRushApp extends StatefulWidget {
@@ -489,7 +483,7 @@ class _HomePageState extends State<HomePage> {
           FilledButton.icon(
             style: FilledButton.styleFrom(
               backgroundColor: Colors.white,
-              foregroundColor: Color(0xFF6C3BFF),
+              foregroundColor: const Color(0xFF6C3BFF),
             ),
             onPressed: () {
               setState(() {
