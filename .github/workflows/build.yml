@@ -90,6 +90,7 @@ jobs:
           export ADMOB_APP_ID="${ADMOB_APP_ID:-ca-app-pub-3940256099942544~3347511713}"
 
           python3 - <<'PY'
+          import re
           from pathlib import Path
           import os
 
@@ -101,15 +102,20 @@ jobs:
           text = manifest.read_text()
           app_id = os.environ["ADMOB_APP_ID"]
 
-          if "android.permission.INTERNET" not in text:
-              first_close = text.find(">")
+          # Find the opening <manifest ...> tag specifically, not any '>'
+          manifest_tag_match = re.search(r"<manifest\b[^>]*>", text)
 
-              if first_close != -1:
-                  text = (
-                      text[:first_close + 1]
-                      + '\n    <uses-permission android:name="android.permission.INTERNET" />\n'
-                      + text[first_close + 1:]
-                  )
+          if not manifest_tag_match:
+              raise SystemExit("Could not find <manifest> tag")
+
+          insert_pos = manifest_tag_match.end()
+
+          if "android.permission.INTERNET" not in text:
+              text = (
+                  text[:insert_pos]
+                  + '\n    <uses-permission android:name="android.permission.INTERNET" />\n'
+                  + text[insert_pos:]
+              )
 
           if "com.google.android.gms.ads.APPLICATION_ID" not in text:
               meta = f'''
@@ -144,6 +150,10 @@ jobs:
             --release \
             --no-tree-shake-icons \
             --dart-define=ADMOB_BANNER_ID="$BANNER_ID"
+
+      - name: Verify AndroidManifest
+        run: |
+          cat android/app/src/main/AndroidManifest.xml
 
       - name: Verify APK
         run: |
