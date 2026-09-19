@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "644662949666",
+    "project_id": "viberush-d3e7f",
+    "storage_bucket": "viberush-d3e7f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:644662949666:android:56b5d272ca349a3609977b",
+        "android_client_info": {
+          "package_name": "com.viberush.app.viberush"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAK09XW0nYYrzd3r20fRybPzgtoTWCtDpw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
