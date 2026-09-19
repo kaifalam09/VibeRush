@@ -1,56 +1,10 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:share_plus/share_plus.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Catch any error and show it on screen instead of crashing silently
-  ErrorWidget.builder = (FlutterErrorDetails details) {
-    return Material(
-      child: Container(
-        color: Colors.red,
-        padding: const EdgeInsets.all(20),
-        alignment: Alignment.center,
-        child: SingleChildScrollView(
-          child: Text(
-            'ERROR:\n\n${details.exceptionAsString()}\n\n${details.stack}',
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-          ),
-        ),
-      ),
-    );
-  };
-
-  FlutterError.onError = (FlutterErrorDetails details) {
-    FlutterError.presentError(details);
-  };
-
-  runZonedGuarded<void>(() {
-    MobileAds.instance.initialize();
-    runApp(const VibeRushApp());
-  }, (Object error, StackTrace stack) {
-    runApp(
-      MaterialApp(
-        home: Scaffold(
-          backgroundColor: Colors.red,
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: SingleChildScrollView(
-                child: Text(
-                  'CRASH:\n\n$error\n\n$stack',
-                  style: const TextStyle(color: Colors.white, fontSize: 12),
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  });
+  runApp(const VibeRushApp());
 }
 
 class VibeRushApp extends StatefulWidget {
@@ -439,8 +393,6 @@ class _HomePageState extends State<HomePage> {
           buildPollCard(),
           const SizedBox(height: 18),
           buildShareCard(),
-          const SizedBox(height: 18),
-          buildAd(),
         ],
       ),
     );
@@ -898,90 +850,7 @@ class _HomePageState extends State<HomePage> {
             ],
           ),
         ),
-        const SizedBox(height: 20),
-        buildAd(),
       ],
-    );
-  }
-
-  Widget buildAd() {
-    return const AdBanner();
-  }
-}
-
-class AdBanner extends StatefulWidget {
-  const AdBanner({super.key});
-
-  @override
-  State<AdBanner> createState() => _AdBannerState();
-}
-
-class _AdBannerState extends State<AdBanner> {
-  BannerAd? bannerAd;
-  bool loaded = false;
-
-  static const String bannerId = String.fromEnvironment(
-    'ADMOB_BANNER_ID',
-    defaultValue: 'ca-app-pub-3940256099942544/6300978111',
-  );
-
-  @override
-  void initState() {
-    super.initState();
-    loadAd();
-  }
-
-  void loadAd() {
-    final BannerAd ad = BannerAd(
-      adUnitId: bannerId,
-      request: const AdRequest(),
-      size: AdSize.banner,
-      listener: BannerAdListener(
-        onAdLoaded: (Ad ad) {
-          if (!mounted) {
-            return;
-          }
-
-          setState(() {
-            bannerAd = ad as BannerAd;
-            loaded = true;
-          });
-        },
-        onAdFailedToLoad: (Ad ad, LoadAdError error) {
-          ad.dispose();
-
-          if (!mounted) {
-            return;
-          }
-
-          setState(() {
-            loaded = false;
-          });
-        },
-      ),
-    );
-
-    ad.load();
-  }
-
-  @override
-  void dispose() {
-    bannerAd?.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (!loaded || bannerAd == null) {
-      return const SizedBox.shrink();
-    }
-
-    return Center(
-      child: SizedBox(
-        width: bannerAd!.size.width.toDouble(),
-        height: bannerAd!.size.height.toDouble(),
-        child: AdWidget(ad: bannerAd!),
-      ),
     );
   }
 }
